@@ -32,34 +32,23 @@ jobs:
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Set image tags
+      - name: Set image tag
         id: tags
         run: |
           SHORT_SHA="${GITHUB_SHA::8}"
           echo "sha_tag=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "latest_tag=latest" >> "$GITHUB_OUTPUT"
           echo "image_uri=${{ env.ECR_REPOSITORY }}:${SHORT_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Build Docker image
         run: |
           docker build \
             -t "${{ env.ECR_REPOSITORY }}:${{ steps.tags.outputs.sha_tag }}" \
-            -t "${{ env.ECR_REPOSITORY }}:latest" \
             .
 
-      # Immutable tags: push SHA tag first (will fail if it already exists, preventing overwrite)
+      # Immutable tags: push SHA tag (will fail if it already exists, preventing overwrite)
+      # This push is what EventBridge detects to trigger the pipeline
       - name: Push SHA-tagged image
         run: docker push "${{ env.ECR_REPOSITORY }}:${{ steps.tags.outputs.sha_tag }}"
-
-      # Push latest last — this push is what EventBridge detects to trigger the pipeline
-      - name: Push latest tag
-        run: docker push "${{ env.ECR_REPOSITORY }}:latest"
-
-      # Upload deployment artefacts so CodePipeline's GitHub source picks them up
-      - name: Update taskdef.json with new image URI
-        run: |
-          sed -i "s|ACCOUNT_ID|${{ secrets.AWS_ACCOUNT_ID }}|g" taskdef.json
-          sed -i "s|us-east-1|${{ env.AWS_REGION }}|g" taskdef.json
 
       - name: Upload deployment artefacts to S3
         run: |
