@@ -1,5 +1,5 @@
 # ── Build stage ───────────────────────────────────────────────────────────────
-FROM maven:3.9-eclipse-temurin-17 AS build
+FROM maven:3.9-amazoncorretto-17 AS build
 WORKDIR /workspace
 COPY pom.xml .
 # Pre-fetch dependencies (layer cached unless pom.xml changes)
@@ -8,14 +8,14 @@ COPY src ./src
 RUN mvn package -DskipTests -q
 
 # ── Runtime stage ──────────────────────────────────────────────────────────────
-FROM eclipse-temurin:17-jre-alpine
+FROM amazoncorretto:17-al2023
 WORKDIR /app
 
 # curl needed for the ECS health check command
-RUN apk add --no-cache curl
+RUN dnf install -y curl && dnf clean all
 
 # Non-root user for security
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 USER appuser
 
 COPY --from=build /workspace/target/ecs-cicd-app-1.0.0.jar app.jar

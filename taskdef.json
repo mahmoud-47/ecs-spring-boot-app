@@ -4,8 +4,8 @@
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "256",
   "memory": "512",
-  "executionRoleArn": "arn:aws:iam::210426829738:role/ecs-cicd-task-execution-role",
-  "taskRoleArn": "arn:aws:iam::210426829738:role/ecs-cicd-task-role",
+  "executionRoleArn": "<EXECUTION_ROLE_ARN>",
+  "taskRoleArn": "<TASK_ROLE_ARN>",
   "containerDefinitions": [
     {
       "name": "app",
@@ -20,8 +20,8 @@
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/ecs-cicd",
-          "awslogs-region": "eu-north-1",
+          "awslogs-group": "<LOG_GROUP>",
+          "awslogs-region": "<AWS_REGION>",
           "awslogs-stream-prefix": "ecs"
         }
       },

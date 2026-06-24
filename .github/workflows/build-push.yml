@@ -9,10 +9,6 @@ permissions:
   id-token: write   # required for OIDC token
   contents: read
 
-env:
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_URI }}
-
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
@@ -21,38 +17,34 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # OIDC — no long-lived AWS credentials stored as secrets
+      # OIDC — role ARN and region are the only bootstrap values needed before AWS auth
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Resolve AWS resources
+        run: |
+          ECR_REPOSITORY=$(aws ecr describe-repositories \
+            --repository-names ecs-cicd/app \
+            --query repositories[0].repositoryUri \
+            --output text)
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "ECR_REPOSITORY=${ECR_REPOSITORY}" >> "$GITHUB_ENV"
+          echo "ARTIFACT_BUCKET=ecs-cicd-pipeline-artifacts-${ACCOUNT_ID}" >> "$GITHUB_ENV"
 
       - name: Log in to Amazon ECR
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Set image tag
-        id: tags
+      - name: Build and push Docker image
         run: |
-          SHORT_SHA="${GITHUB_SHA::8}"
-          echo "sha_tag=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "image_uri=${{ env.ECR_REPOSITORY }}:${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-
-      - name: Build Docker image
-        run: |
-          docker build \
-            -t "${{ env.ECR_REPOSITORY }}:${{ steps.tags.outputs.sha_tag }}" \
-            .
-
-      # Immutable tags: push SHA tag (will fail if it already exists, preventing overwrite)
-      # This push is what EventBridge detects to trigger the pipeline
-      - name: Push SHA-tagged image
-        run: docker push "${{ env.ECR_REPOSITORY }}:${{ steps.tags.outputs.sha_tag }}"
+          docker build -t "${{ env.ECR_REPOSITORY }}:latest" .
+          docker push "${{ env.ECR_REPOSITORY }}:latest"
 
       - name: Upload deployment artefacts to S3
         run: |
-          echo "{\"ImageURI\": \"${{ env.ECR_REPOSITORY }}:${{ steps.tags.outputs.sha_tag }}\"}" > imageDetail.json
+          echo "{\"ImageURI\": \"${{ env.ECR_REPOSITORY }}:latest\"}" > imageDetail.json
           zip deployment-bundle.zip appspec.yaml taskdef.json imageDetail.json
-          aws s3 cp deployment-bundle.zip \
-            "s3://${{ secrets.ARTIFACT_BUCKET }}/deployment-bundle.zip"
+          aws s3 cp deployment-bundle.zip "s3://${{ env.ARTIFACT_BUCKET }}/deployment-bundle.zip"
