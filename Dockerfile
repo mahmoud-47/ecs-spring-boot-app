@@ -12,7 +12,8 @@ FROM amazoncorretto:17-al2023
 WORKDIR /app
 
 # Non-root user for security
-RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+RUN dnf install -y shadow-utils && dnf clean all \
+    && groupadd -r appgroup && useradd -r -g appgroup appuser
 USER appuser
 
 COPY --from=build /workspace/target/ecs-cicd-app-1.0.0.jar app.jar
