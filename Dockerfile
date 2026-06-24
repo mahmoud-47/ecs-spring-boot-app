@@ -11,9 +11,6 @@ RUN mvn package -DskipTests -q
 FROM amazoncorretto:17-al2023
 WORKDIR /app
 
-# curl needed for the ECS health check command
-RUN dnf install -y curl && dnf clean all
-
 # Non-root user for security
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 USER appuser
